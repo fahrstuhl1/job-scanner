@@ -94,6 +94,8 @@
     padding: 16px; z-index: 10;
   }
   .modal-backdrop[hidden] { display: none; }
+  .modal-backdrop { overflow-y: auto; }
+  body.modal-open { overflow: hidden; }
   .modal {
     background: var(--surface); border: 1px solid var(--hair);
     border-radius: var(--radius); padding: 20px; max-width: 360px; width: 100%;
@@ -593,14 +595,17 @@ function triggerScan(body) {
 
 $("#scanBtn").addEventListener("click", () => triggerScan());
 
-$("#deepBtn").addEventListener("click", () => { $("#modalBackdrop").hidden = false; });
-$("#deepCancel").addEventListener("click", () => { $("#modalBackdrop").hidden = true; });
+function showModal(el) { el.hidden = false; document.body.classList.add("modal-open"); }
+function hideModal(el) { el.hidden = true; document.body.classList.remove("modal-open"); }
+
+$("#deepBtn").addEventListener("click", () => showModal($("#modalBackdrop")));
+$("#deepCancel").addEventListener("click", () => hideModal($("#modalBackdrop")));
 $("#modalBackdrop").addEventListener("click", e => {
-  if (e.target === $("#modalBackdrop")) $("#modalBackdrop").hidden = true;
+  if (e.target === $("#modalBackdrop")) hideModal($("#modalBackdrop"));
 });
 $("#deepStart").addEventListener("click", () => {
   const days = Math.max(0, Math.min(90, parseInt($("#deepDays").value, 10) || 0));
-  $("#modalBackdrop").hidden = true;
+  hideModal($("#modalBackdrop"));
   triggerScan({ days });
 });
 
@@ -648,7 +653,7 @@ async function openSettings() {
   try {
     const s = await fetch("api/settings").then(r => r.json());
     populateSettings(s);
-    $("#settingsBackdrop").hidden = false;
+    showModal($("#settingsBackdrop"));
   } catch (err) {
     showSettingsError("Einstellungen konnten nicht geladen werden.");
   }
@@ -684,7 +689,7 @@ async function saveSettings() {
       showSettingsError(body.error || "Einstellungen konnten nicht gespeichert werden.");
       return;
     }
-    $("#settingsBackdrop").hidden = true;
+    hideModal($("#settingsBackdrop"));
     loadStats(); loadJobs();
   } catch (err) {
     showSettingsError("Einstellungen konnten nicht gespeichert werden.");
@@ -708,9 +713,9 @@ async function resetSettings() {
 }
 
 $("#settingsBtn").addEventListener("click", openSettings);
-$("#settingsCancel").addEventListener("click", () => { $("#settingsBackdrop").hidden = true; });
+$("#settingsCancel").addEventListener("click", () => hideModal($("#settingsBackdrop")));
 $("#settingsBackdrop").addEventListener("click", e => {
-  if (e.target === $("#settingsBackdrop")) $("#settingsBackdrop").hidden = true;
+  if (e.target === $("#settingsBackdrop")) hideModal($("#settingsBackdrop"));
 });
 $("#settingsSave").addEventListener("click", saveSettings);
 $("#settingsReset").addEventListener("click", resetSettings);
