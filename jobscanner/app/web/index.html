@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Jobscanner</title>
+<style>
+  :root {
+    --bg:        #0f141a;
+    --surface:   #18212b;
+    --raised:    #202c38;
+    --hair:      #2c3a47;
+    --text:      #e6edf3;
+    --muted:     #8a9aa8;
+    --faint:     #5d6b78;
+    --teal:      #46cabb;   /* interactive */
+    --teal-dim:  #2c6b65;
+    --fresh:     #f2a93b;   /* recency signal */
+    --fresh-dim: #6e4f24;
+    --radius:    12px;
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+    --sans: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 15px;
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 920px; margin: 0 auto; padding: 20px 18px 64px; }
+
+  /* ---- status bar ---- */
+  .topbar {
+    display: flex; align-items: center; gap: 14px;
+    flex-wrap: wrap;
+    padding-bottom: 16px; margin-bottom: 18px;
+    border-bottom: 1px solid var(--hair);
+  }
+  .brand {
+    font-family: var(--mono);
+    font-weight: 600; letter-spacing: 0.14em;
+    font-size: 15px; text-transform: uppercase;
+    color: var(--text);
+  }
+  .brand .dot {
+    color: var(--teal);
+  }
+  .chip {
+    font-family: var(--mono); font-size: 12px;
+    color: var(--muted);
+    background: var(--surface);
+    border: 1px solid var(--hair);
+    padding: 4px 9px; border-radius: 999px;
+    white-space: nowrap;
+  }
+  .spacer { flex: 1 1 auto; }
+  .status {
+    display: inline-flex; align-items: center; gap: 7px;
+    font-family: var(--mono); font-size: 12px; color: var(--muted);
+  }
+  .led {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--faint); flex: none;
+  }
+  .status.live .led { background: var(--teal); animation: pulse 1.4s ease-in-out infinite; }
+  @keyframes pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(70,202,187,0.55); }
+    50%      { box-shadow: 0 0 0 6px rgba(70,202,187,0); }
+  }
+  button.scan {
+    font-family: var(--mono); font-size: 12px; letter-spacing: 0.03em;
+    color: var(--bg); background: var(--teal);
+    border: none; border-radius: 8px;
+    padding: 8px 14px; cursor: pointer;
+    transition: filter .15s ease, opacity .15s ease;
+  }
+  button.scan:hover { filter: brightness(1.08); }
+  button.scan:disabled { opacity: .5; cursor: default; }
+  button.scan:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+
+  /* ---- stat strip ---- */
+  .stats { display: flex; gap: 10px; margin-bottom: 22px; flex-wrap: wrap; }
+  .stat {
+    flex: 1 1 0; min-width: 120px;
+    background: var(--surface);
+    border: 1px solid var(--hair);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+  }
+  .stat .num {
+    font-family: var(--mono); font-size: 30px; font-weight: 600;
+    line-height: 1; letter-spacing: -0.02em;
+  }
+  .stat.fresh .num { color: var(--fresh); }
+  .stat .lbl {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em;
+    color: var(--muted); margin-top: 8px;
+  }
+
+  /* ---- tabs + controls ---- */
+  .controls {
+    display: flex; align-items: center; gap: 12px;
+    margin-bottom: 16px; flex-wrap: wrap;
+  }
+  .tabs { display: inline-flex; background: var(--surface);
+          border: 1px solid var(--hair); border-radius: 999px; padding: 3px; }
+  .tab {
+    font-family: var(--mono); font-size: 13px;
+    color: var(--muted); background: none; border: none;
+    padding: 6px 16px; border-radius: 999px; cursor: pointer;
+  }
+  .tab.active { color: var(--bg); background: var(--text); }
+  .tab:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+  .grow { flex: 1 1 auto; }
+  input.search, select.filter {
+    font-family: var(--sans); font-size: 13px;
+    color: var(--text); background: var(--surface);
+    border: 1px solid var(--hair); border-radius: 8px;
+    padding: 8px 11px;
+  }
+  input.search { min-width: 160px; }
+  input.search::placeholder { color: var(--faint); }
+  input.search:focus, select.filter:focus { outline: none; border-color: var(--teal-dim); }
+
+  /* ---- job cards ---- */
+  .list { display: flex; flex-direction: column; gap: 10px; }
+  .card {
+    position: relative;
+    background: var(--surface);
+    border: 1px solid var(--hair);
+    border-left: 4px solid var(--hair);
+    border-radius: var(--radius);
+    padding: 15px 17px 15px 18px;
+    transition: border-color .15s ease, background .15s ease;
+  }
+  .card:hover { background: var(--raised); }
+  .card .title {
+    font-size: 16px; font-weight: 600; margin: 0 110px 4px 0;
+    color: var(--text);
+  }
+  .card .employer { color: var(--muted); font-size: 14px; }
+  .meta {
+    margin-top: 9px; display: flex; flex-wrap: wrap; gap: 6px 14px;
+    font-family: var(--mono); font-size: 12px; color: var(--faint);
+  }
+  .meta .k { color: var(--muted); }
+  .dist {
+    font-family: var(--mono); font-size: 12px;
+    color: var(--teal);
+  }
+  .seen-badge {
+    position: absolute; top: 14px; right: 16px;
+    font-family: var(--mono); font-size: 11px;
+    color: var(--fresh);
+  }
+  .card.archived .seen-badge { color: var(--faint); }
+  a.view {
+    position: absolute; right: 16px; bottom: 14px;
+    font-family: var(--mono); font-size: 12px;
+    color: var(--teal); text-decoration: none;
+  }
+  a.view:hover { text-decoration: underline; }
+  a.view:focus-visible { outline: 2px solid var(--teal); outline-offset: 3px; }
+
+  /* ---- empty / loading ---- */
+  .empty {
+    text-align: center; padding: 56px 20px; color: var(--muted);
+    border: 1px dashed var(--hair); border-radius: var(--radius);
+  }
+  .empty .big { font-size: 15px; color: var(--text); margin-bottom: 6px; }
+  .empty .sub { font-size: 13px; }
+
+  .card { animation: rise .25s ease both; }
+  @keyframes rise { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+  @media (prefers-reduced-motion: reduce) {
+    .card { animation: none; }
+    .status.live .led { animation: none; }
+  }
+  @media (max-width: 560px) {
+    .card .title { margin-right: 0; }
+    .seen-badge { position: static; display: block; margin-bottom: 6px; }
+    a.view { position: static; display: inline-block; margin-top: 10px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="topbar">
+    <span class="brand">Job<span class="dot">·</span>Scanner</span>
+    <span class="chip" id="loc">–</span>
+    <span class="spacer"></span>
+    <span class="status" id="status"><span class="led"></span><span id="statusText">–</span></span>
+    <button class="scan" id="scanBtn">Jetzt scannen</button>
+  </header>
+
+  <section class="stats">
+    <div class="stat fresh"><div class="num" id="nNew">–</div><div class="lbl">neu im Fenster</div></div>
+    <div class="stat"><div class="num" id="nTotal">–</div><div class="lbl">beobachtet</div></div>
+    <div class="stat"><div class="num" id="nSearch">–</div><div class="lbl">Suchprofile</div></div>
+  </section>
+
+  <div class="controls">
+    <div class="tabs">
+      <button class="tab active" data-bucket="new" id="tabNew">Neu</button>
+      <button class="tab" data-bucket="archive" id="tabArch">Archiv</button>
+    </div>
+    <span class="grow"></span>
+    <select class="filter" id="filter"><option value="">Alle Profile</option></select>
+    <input class="search" id="q" type="search" placeholder="Titel, Firma, Ort …">
+  </div>
+
+  <div class="list" id="list"></div>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+let state = { bucket: "new", q: "", filter: "", window: 24 };
+
+function deAgo(iso) {
+  if (!iso) return "";
+  const then = new Date(iso), now = new Date();
+  const min = Math.max(0, Math.round((now - then) / 60000));
+  if (min < 1) return "gerade eben";
+  if (min < 60) return `vor ${min} Min`;
+  const h = Math.round(min / 60);
+  if (h < 24) return `vor ${h} Std`;
+  const d = Math.round(h / 24);
+  return d === 1 ? "vor 1 Tag" : `vor ${d} Tagen`;
+}
+function deDate(iso) {
+  if (!iso) return "–";
+  const d = new Date(iso);
+  if (isNaN(d)) return iso;
+  return d.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "2-digit" });
+}
+// freshness colour for the left bar: amber that fades over the new-window
+function freshBar(firstSeen) {
+  const h = (Date.now() - new Date(firstSeen)) / 3.6e6;
+  if (h > state.window) return "var(--hair)";
+  const t = 1 - (h / state.window) * 0.7;      // 1.0 → 0.3
+  return `rgba(242,169,59,${t.toFixed(2)})`;
+}
+
+async function loadStats() {
+  try {
+    const s = await (await fetch("api/stats")).json();
+    state.window = s.new_window_hours || 24;
+    $("#nNew").textContent = s.new;
+    $("#nTotal").textContent = s.total;
+    $("#nSearch").textContent = (s.searches || []).length;
+    $("#loc").textContent = `${s.wo || "?"} · ${s.umkreis || "?"} km`;
+    $("#status").classList.toggle("live", !!s.scanning);
+    $("#statusText").textContent = s.scanning
+      ? "scannt …"
+      : (s.last_scan ? `Scan ${deAgo(s.last_scan)}` : "noch kein Scan");
+    const sel = $("#filter");
+    if (sel.options.length <= 1 && s.searches) {
+      s.searches.forEach(n => {
+        const o = document.createElement("option");
+        o.value = o.textContent = n; sel.appendChild(o);
+      });
+    }
+  } catch (e) { $("#statusText").textContent = "offline"; }
+}
+
+async function loadJobs() {
+  const url = `api/jobs?bucket=${state.bucket}`
+    + (state.q ? `&q=${encodeURIComponent(state.q)}` : "")
+    + (state.filter ? `&search=${encodeURIComponent(state.filter)}` : "");
+  let jobs = [];
+  try { jobs = await (await fetch(url)).json(); } catch (e) {}
+  render(jobs);
+}
+
+function render(jobs) {
+  const list = $("#list");
+  if (!jobs.length) {
+    const msg = state.bucket === "new"
+      ? ["Keine neuen Stellen im Fenster", "Der Scanner läuft weiter — neue Treffer erscheinen hier automatisch."]
+      : ["Archiv ist leer", "Hier landen Stellen, sobald sie älter als das Neu-Fenster sind."];
+    list.innerHTML = `<div class="empty"><div class="big">${msg[0]}</div><div class="sub">${msg[1]}</div></div>`;
+    return;
+  }
+  list.innerHTML = jobs.map(j => {
+    const dist = (j.distance != null) ? `<span class="dist">${Math.round(j.distance)} km</span>` : "";
+    const ort = [j.plz, j.ort].filter(Boolean).join(" ");
+    const archived = state.bucket === "archive";
+    return `
+      <article class="card${archived ? " archived" : ""}" style="border-left-color:${freshBar(j.first_seen)}">
+        <div class="seen-badge">entdeckt ${deAgo(j.first_seen)}</div>
+        <h3 class="title">${esc(j.title)}</h3>
+        <div class="employer">${esc(j.employer)}</div>
+        <div class="meta">
+          ${ort ? `<span><span class="k">Ort</span> ${esc(ort)}</span>` : ""}
+          ${dist}
+          <span><span class="k">veröffentlicht</span> ${deDate(j.published)}</span>
+          ${j.entry_date ? `<span><span class="k">Eintritt</span> ${deDate(j.entry_date)}</span>` : ""}
+        </div>
+        ${j.external_url ? `<a class="view" href="${esc(j.external_url)}" target="_blank" rel="noopener">Ansehen →</a>` : ""}
+      </article>`;
+  }).join("");
+}
+function esc(s) { return String(s ?? "").replace(/[&<>"]/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;" }[c])); }
+
+// events
+document.querySelectorAll(".tab").forEach(t => t.addEventListener("click", () => {
+  document.querySelectorAll(".tab").forEach(x => x.classList.remove("active"));
+  t.classList.add("active");
+  state.bucket = t.dataset.bucket;
+  loadJobs();
+}));
+let qTimer;
+$("#q").addEventListener("input", e => {
+  clearTimeout(qTimer);
+  qTimer = setTimeout(() => { state.q = e.target.value.trim(); loadJobs(); }, 250);
+});
+$("#filter").addEventListener("change", e => { state.filter = e.target.value; loadJobs(); });
+$("#scanBtn").addEventListener("click", async () => {
+  const b = $("#scanBtn"); b.disabled = true; b.textContent = "scannt …";
+  try { await fetch("api/scan", { method: "POST" }); } catch (e) {}
+  const poll = setInterval(async () => {
+    await loadStats();
+    if (!$("#status").classList.contains("live")) {
+      clearInterval(poll); b.disabled = false; b.textContent = "Jetzt scannen";
+      loadJobs();
+    }
+  }, 1500);
+});
+
+loadStats(); loadJobs();
+setInterval(loadStats, 30000);
+</script>
+</body>
+</html>

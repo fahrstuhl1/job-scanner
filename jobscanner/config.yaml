@@ -1,0 +1,46 @@
+name: Job Scanner
+version: "1.0.0"
+slug: jobscanner
+description: >-
+  Beobachtet die Jobsuche der Bundesagentur fuer Arbeit und meldet neue
+  Stellen im konfigurierten Umkreis. Mit Dashboard fuer neue Treffer (24h)
+  und Archiv.
+url: "https://github.com/fahrstuhl1/job-scanner"
+arch:
+  - amd64
+  - aarch64
+  - armv7
+startup: application
+boot: auto
+ingress: true
+ingress_port: 8099
+panel_icon: mdi:briefcase-search-outline
+panel_title: Jobscanner
+options:
+  wo: "Nienhagen"
+  umkreis: 50
+  searches:
+    - name: "Teamleiter IT-Infrastruktur"
+      query: "Teamleiter IT Infrastruktur"
+    - name: "IT Infrastructure Manager"
+      query: "IT Infrastructure Manager"
+  angebotsart: 1
+  include_zeitarbeit: false
+  include_pav: false
+  poll_interval_minutes: 60
+  new_window_hours: 24
+  prune_after_days: 45
+  log_level: info
+schema:
+  wo: str
+  umkreis: int(1,200)
+  searches:
+    - name: str
+      query: str
+  angebotsart: int(1,99)
+  include_zeitarbeit: bool
+  include_pav: bool
+  poll_interval_minutes: int(5,1440)
+  new_window_hours: int(1,720)
+  prune_after_days: int(1,365)
+  log_level: list(trace|debug|info|warning|error)
