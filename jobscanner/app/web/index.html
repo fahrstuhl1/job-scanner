@@ -81,6 +81,37 @@
   button.scan:hover { filter: brightness(1.08); }
   button.scan:disabled { opacity: .5; cursor: default; }
   button.scan:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+  button.scan.secondary {
+    color: var(--text); background: var(--surface);
+    border: 1px solid var(--hair);
+  }
+  button.scan.secondary:hover { filter: none; background: var(--raised); }
+
+  /* ---- modal ---- */
+  .modal-backdrop {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+    display: flex; align-items: center; justify-content: center;
+    padding: 16px; z-index: 10;
+  }
+  .modal-backdrop[hidden] { display: none; }
+  .modal {
+    background: var(--surface); border: 1px solid var(--hair);
+    border-radius: var(--radius); padding: 20px; max-width: 360px; width: 100%;
+  }
+  .modal h3 { margin: 0 0 8px; font-size: 16px; }
+  .modal p { margin: 0 0 14px; font-size: 13px; color: var(--muted); }
+  .modal label {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    font-size: 13px; margin-bottom: 16px;
+  }
+  .modal input[type="number"] {
+    font-family: var(--mono); font-size: 13px;
+    color: var(--text); background: var(--raised);
+    border: 1px solid var(--hair); border-radius: 8px;
+    padding: 6px 9px; width: 70px;
+  }
+  .modal input[type="number"]:focus { outline: none; border-color: var(--teal-dim); }
+  .modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
 
   /* ---- stat strip ---- */
   .stats { display: flex; gap: 10px; margin-bottom: 22px; flex-wrap: wrap; }
@@ -194,8 +225,25 @@
     <span class="chip" id="loc">–</span>
     <span class="spacer"></span>
     <span class="status" id="status"><span class="led"></span><span id="statusText">–</span></span>
+    <button class="scan secondary" id="deepBtn" title="Auch ältere Stellen nachladen">Tiefensuche</button>
     <button class="scan" id="scanBtn">Jetzt scannen</button>
   </header>
+
+  <div class="modal-backdrop" id="modalBackdrop" hidden>
+    <div class="modal">
+      <h3>Tiefensuche</h3>
+      <p>Lädt zusätzlich Stellen, die schon länger als das übliche Fenster
+         veröffentlicht sind – nützlich beim ersten Scan oder nach längerer
+         Pause.</p>
+      <label>Veröffentlicht in den letzten
+        <input type="number" id="deepDays" min="0" max="90" value="30">
+        Tagen</label>
+      <div class="modal-actions">
+        <button class="scan secondary" id="deepCancel">Abbrechen</button>
+        <button class="scan" id="deepStart">Starten</button>
+      </div>
+    </div>
+  </div>
 
   <section class="stats">
     <div class="stat fresh"><div class="num" id="nNew">–</div><div class="lbl">neu im Fenster</div></div>
@@ -343,16 +391,38 @@ $("#q").addEventListener("input", e => {
 });
 $("#filter").addEventListener("change", e => { state.filter = e.target.value; loadJobs(); });
 $("#sort").addEventListener("change", e => { state.sort = e.target.value; render(sortJobs(state.jobs)); });
-$("#scanBtn").addEventListener("click", async () => {
-  const b = $("#scanBtn"); b.disabled = true; b.textContent = "scannt …";
-  try { await fetch("api/scan", { method: "POST" }); } catch (e) {}
+function triggerScan(body) {
+  const scanBtn = $("#scanBtn"), deepBtn = $("#deepBtn");
+  const prevScan = scanBtn.textContent, prevDeep = deepBtn.textContent;
+  scanBtn.disabled = true; deepBtn.disabled = true;
+  scanBtn.textContent = "scannt …";
+  fetch("api/scan", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body || {}),
+  }).catch(() => {});
   const poll = setInterval(async () => {
     await loadStats();
     if (!$("#status").classList.contains("live")) {
-      clearInterval(poll); b.disabled = false; b.textContent = "Jetzt scannen";
+      clearInterval(poll);
+      scanBtn.disabled = false; deepBtn.disabled = false;
+      scanBtn.textContent = prevScan; deepBtn.textContent = prevDeep;
       loadJobs();
     }
   }, 1500);
+}
+
+$("#scanBtn").addEventListener("click", () => triggerScan());
+
+$("#deepBtn").addEventListener("click", () => { $("#modalBackdrop").hidden = false; });
+$("#deepCancel").addEventListener("click", () => { $("#modalBackdrop").hidden = true; });
+$("#modalBackdrop").addEventListener("click", e => {
+  if (e.target === $("#modalBackdrop")) $("#modalBackdrop").hidden = true;
+});
+$("#deepStart").addEventListener("click", () => {
+  const days = Math.max(0, Math.min(90, parseInt($("#deepDays").value, 10) || 0));
+  $("#modalBackdrop").hidden = true;
+  triggerScan({ days });
 });
 
 loadStats(); loadJobs();

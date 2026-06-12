@@ -8,11 +8,15 @@ import db
 WEB_DIR = os.path.join(os.path.dirname(__file__), "web")
 
 
+MAX_SCAN_DAYS = 90
+
+
 class State:
     def __init__(self):
         self.opts = {}
         self.scanning = False
         self.scan_event = threading.Event()
+        self.pending_days = None
 
 
 def create_app(state):
@@ -48,6 +52,19 @@ def create_app(state):
 
     @app.post("/api/scan")
     def scan_now():
+        body = request.get_json(silent=True) or {}
+        days = body.get("days")
+        if days is not None:
+            try:
+                days = int(days)
+            except (TypeError, ValueError):
+                return jsonify({"ok": False, "error": "days muss eine Zahl sein"}), 400
+            if not (0 <= days <= MAX_SCAN_DAYS):
+                return jsonify({
+                    "ok": False,
+                    "error": f"days muss zwischen 0 und {MAX_SCAN_DAYS} liegen",
+                }), 400
+            state.pending_days = days
         state.scan_event.set()
         return jsonify({"ok": True})
 

@@ -1,5 +1,5 @@
 name: Job Scanner
-version: "1.0.0"
+version: "1.1.0"
 slug: jobscanner
 description: >-
   Beobachtet die Jobsuche der Bundesagentur fuer Arbeit und meldet neue
@@ -30,6 +30,7 @@ options:
   poll_interval_minutes: 60
   new_window_hours: 24
   prune_after_days: 45
+  initial_scan_days: 30
   log_level: info
 schema:
   wo: str
@@ -43,4 +44,5 @@ schema:
   poll_interval_minutes: int(5,1440)
   new_window_hours: int(1,720)
   prune_after_days: int(1,365)
+  initial_scan_days: int(0,90)
   log_level: list(trace|debug|info|warning|error)

@@ -12,8 +12,13 @@ PORT = 8099
 
 def poller(state):
     log = logging.getLogger("poller")
+    first_run = db.meta_get("last_scan") is None
     while True:
         o = state.opts
+        days = state.pending_days
+        state.pending_days = None
+        if days is None and first_run:
+            days = int(o.get("initial_scan_days", 30)) or None
         try:
             state.scanning = True
             jobs = scanner.scan(
@@ -21,16 +26,22 @@ def poller(state):
                 o.get("angebotsart", 1),
                 o.get("include_zeitarbeit", False),
                 o.get("include_pav", False),
+                veroeffentlichtseit=days,
             )
             new = db.upsert(jobs)
             removed = db.prune(int(o.get("prune_after_days", 45)))
             db.meta_set("last_scan", db.now_iso())
-            log.info("Scan fertig: %d gesehen, %d neu, %d entfernt",
-                     len(jobs), new, removed)
+            if days is not None:
+                log.info("Scan fertig (letzte %d Tage): %d gesehen, %d neu, %d entfernt",
+                         days, len(jobs), new, removed)
+            else:
+                log.info("Scan fertig: %d gesehen, %d neu, %d entfernt",
+                         len(jobs), new, removed)
         except Exception as ex:  # noqa: BLE001
             log.exception("Scan-Fehler: %s", ex)
         finally:
             state.scanning = False
+            first_run = False
 
         interval = int(o.get("poll_interval_minutes", 60)) * 60
         if state.scan_event.wait(timeout=interval):

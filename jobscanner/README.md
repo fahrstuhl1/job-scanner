@@ -47,6 +47,7 @@ Falls kein Git/Internet-Zugriff vom Supervisor aus möglich ist, den Ordner
 | `poll_interval_minutes` | Scan-Intervall (5–1440) |
 | `new_window_hours` | Wie lange ein Treffer als „neu“ gilt (Standard: 24) |
 | `prune_after_days` | Treffer löschen, die so lange nicht mehr in Ergebnissen auftauchten |
+| `initial_scan_days` | Beim allerersten Scan zusätzlich Stellen abrufen, die bis zu so viele Tage zurückliegen (0 = aus, Standard: 30) |
 | `log_level` | trace/debug/info/warning/error |
 
 Beispiel:
@@ -75,6 +76,18 @@ Scan ist erwartungsgemäß alles „neu“.
 Jede Karte zeigt zusätzlich das Veröffentlichungsdatum und die Entfernung vom
 `wo`-Standort. Der linke Rand der „Neu“-Karten ist umso wärmer (bernsteinfarben),
 je frischer der Treffer ist.
+
+Über den Treffern lassen sich die Karten zusätzlich nach Entdeckungsdatum,
+Entfernung, Veröffentlichungs- oder Eintrittsdatum sortieren.
+
+### Tiefensuche
+
+Die Jobsuche-API liefert standardmäßig vor allem aktuell veröffentlichte
+Stellen. Mit dem Button **„Tiefensuche“** lässt sich gezielt ein Scan
+anstoßen, der zusätzlich Stellen der letzten *X* Tage abruft (per Dialog
+einstellbar, 0–90 Tage). Beim allerersten Scan passiert das automatisch über
+`initial_scan_days`, damit von Anfang an auch ältere, noch offene Stellen
+auftauchen.
 
 ## Daten & Speicher
 
