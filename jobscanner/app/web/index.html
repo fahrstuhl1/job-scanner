@@ -161,13 +161,18 @@
   .list { display: flex; flex-direction: column; gap: 10px; }
   .card {
     position: relative;
+    display: block;
     background: var(--surface);
     border: 1px solid var(--hair);
     border-left: 4px solid var(--hair);
     border-radius: var(--radius);
     padding: 15px 17px 15px 18px;
+    text-decoration: none;
+    color: inherit;
     transition: border-color .15s ease, background .15s ease;
   }
+  .card.clickable { cursor: pointer; }
+  .card.clickable:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
   .card:hover { background: var(--raised); }
   .card .title {
     font-size: 16px; font-weight: 600; margin: 0 110px 4px 0;
@@ -189,13 +194,11 @@
     color: var(--fresh);
   }
   .card.archived .seen-badge { color: var(--faint); }
-  a.view {
+  .view-arrow {
     position: absolute; right: 16px; bottom: 14px;
     font-family: var(--mono); font-size: 12px;
-    color: var(--teal); text-decoration: none;
+    color: var(--teal);
   }
-  a.view:hover { text-decoration: underline; }
-  a.view:focus-visible { outline: 2px solid var(--teal); outline-offset: 3px; }
 
   /* ---- empty / loading ---- */
   .empty {
@@ -214,7 +217,7 @@
   @media (max-width: 560px) {
     .card .title { margin-right: 0; }
     .seen-badge { position: static; display: block; margin-bottom: 6px; }
-    a.view { position: static; display: inline-block; margin-top: 10px; }
+    .view-arrow { position: static; display: inline-block; margin-top: 10px; }
   }
 </style>
 </head>
@@ -360,8 +363,12 @@ function render(jobs) {
     const dist = (j.distance != null) ? `<span class="dist">${Math.round(j.distance)} km</span>` : "";
     const ort = [j.plz, j.ort].filter(Boolean).join(" ");
     const archived = state.bucket === "archive";
+    const tag = j.external_url ? "a" : "article";
+    const link = j.external_url
+      ? ` href="${esc(j.external_url)}" target="_blank" rel="noopener"`
+      : "";
     return `
-      <article class="card${archived ? " archived" : ""}" style="border-left-color:${freshBar(j.first_seen)}">
+      <${tag} class="card${archived ? " archived" : ""}${j.external_url ? " clickable" : ""}"${link} style="border-left-color:${freshBar(j.first_seen)}">
         <div class="seen-badge">entdeckt ${deAgo(j.first_seen)}</div>
         <h3 class="title">${esc(j.title)}</h3>
         <div class="employer">${esc(j.employer)}</div>
@@ -371,8 +378,8 @@ function render(jobs) {
           <span><span class="k">veröffentlicht</span> ${deDate(j.published)}</span>
           ${j.entry_date ? `<span><span class="k">Eintritt</span> ${deDate(j.entry_date)}</span>` : ""}
         </div>
-        ${j.external_url ? `<a class="view" href="${esc(j.external_url)}" target="_blank" rel="noopener">Ansehen →</a>` : ""}
-      </article>`;
+        ${j.external_url ? `<span class="view-arrow">Ansehen →</span>` : ""}
+      </${tag}>`;
   }).join("");
 }
 function esc(s) { return String(s ?? "").replace(/[&<>"]/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;" }[c])); }
