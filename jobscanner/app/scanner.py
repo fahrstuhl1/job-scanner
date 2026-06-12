@@ -1,6 +1,8 @@
 import logging
 
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 log = logging.getLogger("scanner")
 
@@ -13,6 +15,25 @@ HEADERS = {
 PUBLIC_DETAIL = "https://www.arbeitsagentur.de/jobsuche/jobdetail/{refnr}"
 MAX_PAGES = 6
 PAGE_SIZE = 100
+
+_session = None
+
+
+def _get_session():
+    global _session
+    if _session is None:
+        s = requests.Session()
+        retry = Retry(
+            total=3,
+            backoff_factor=0.5,
+            status_forcelist=[429, 500, 502, 503, 504],
+            allowed_methods=["GET"],
+        )
+        adapter = HTTPAdapter(max_retries=retry)
+        s.mount("https://", adapter)
+        s.mount("http://", adapter)
+        _session = s
+    return _session
 
 
 def _parse(e, search_name):
@@ -33,9 +54,17 @@ def _parse(e, search_name):
     }
 
 
+def _is_excluded(job, exclude_terms):
+    if not exclude_terms:
+        return False
+    haystack = f"{job.get('title') or ''} {job.get('employer') or ''}".lower()
+    return any(term.lower() in haystack for term in exclude_terms if term)
+
+
 def search_one(query, wo, umkreis, angebotsart, zeitarbeit, pav, search_name,
                 veroeffentlichtseit=None):
     found = {}
+    session = _get_session()
     for page in range(1, MAX_PAGES + 1):
         params = {
             "was": query,
@@ -49,7 +78,7 @@ def search_one(query, wo, umkreis, angebotsart, zeitarbeit, pav, search_name,
         }
         if veroeffentlichtseit is not None:
             params["veroeffentlichtseit"] = veroeffentlichtseit
-        r = requests.get(BASE, headers=HEADERS, params=params, timeout=30)
+        r = session.get(BASE, headers=HEADERS, params=params, timeout=30)
         r.raise_for_status()
         data = r.json()
         items = data.get("stellenangebote") or []
@@ -63,17 +92,21 @@ def search_one(query, wo, umkreis, angebotsart, zeitarbeit, pav, search_name,
 
 
 def scan(searches, wo, umkreis, angebotsart, zeitarbeit, pav,
-         veroeffentlichtseit=None):
+         veroeffentlichtseit=None, exclude_terms=None):
     """Run every configured search; dedupe across searches (first match wins)."""
     all_jobs = {}
+    global_exclude = exclude_terms or []
     for s in searches:
         query = s.get("query") or s.get("name")
         name = s.get("name") or query
         if not query:
             continue
+        exclude = global_exclude + list(s.get("exclude") or [])
         try:
             for j in search_one(query, wo, umkreis, angebotsart,
                                 zeitarbeit, pav, name, veroeffentlichtseit):
+                if _is_excluded(j, exclude):
+                    continue
                 all_jobs.setdefault(j["refnr"], j)
             log.debug("Suche '%s': %d Treffer (kumuliert %d)",
                       name, len(all_jobs), len(all_jobs))

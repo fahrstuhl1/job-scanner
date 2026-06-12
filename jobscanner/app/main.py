@@ -4,6 +4,7 @@ from waitress import serve
 
 import config
 import db
+import mqtt
 import scanner
 import server
 
@@ -27,10 +28,14 @@ def poller(state):
                 o.get("include_zeitarbeit", False),
                 o.get("include_pav", False),
                 veroeffentlichtseit=days,
+                exclude_terms=o.get("exclude_terms"),
             )
             new = db.upsert(jobs)
             removed = db.prune(int(o.get("prune_after_days", 45)))
             db.meta_set("last_scan", db.now_iso())
+            if o.get("mqtt_enabled"):
+                win = int(o.get("new_window_hours", 24))
+                mqtt.publish_new_count(db.stats(win)["new"])
             if days is not None:
                 log.info("Scan fertig (letzte %d Tage): %d gesehen, %d neu, %d entfernt",
                          days, len(jobs), new, removed)

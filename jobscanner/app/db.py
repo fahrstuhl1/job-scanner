@@ -5,6 +5,8 @@ import sqlite3
 
 DB_PATH = os.environ.get("DB_PATH", "/data/jobs.db")
 
+STATUSES = (None, "saved", "hidden")
+
 
 def _conn():
     c = sqlite3.connect(DB_PATH, timeout=30)
@@ -43,6 +45,12 @@ def init():
         c.execute(
             "CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT)"
         )
+        cols = [r[1] for r in c.execute("PRAGMA table_info(jobs)").fetchall()]
+        if "status" not in cols:
+            c.execute("ALTER TABLE jobs ADD COLUMN status TEXT")
+        c.execute("CREATE INDEX IF NOT EXISTS idx_jobs_first_seen ON jobs(first_seen)")
+        c.execute("CREATE INDEX IF NOT EXISTS idx_jobs_search_name ON jobs(search_name)")
+        c.execute("CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status)")
         c.commit()
 
 
@@ -83,15 +91,21 @@ def upsert(jobs):
     return new
 
 
-def fetch(bucket, new_window_hours, q=None, search_name=None):
+def fetch(bucket, new_window_hours, q=None, search_name=None, limit=100, offset=0):
     cutoff = _cutoff_iso(new_window_hours)
     where, params = [], []
-    if bucket == "new":
-        where.append("first_seen >= ?")
-        params.append(cutoff)
+    if bucket == "saved":
+        where.append("status = 'saved'")
+    elif bucket == "hidden":
+        where.append("status = 'hidden'")
     else:
-        where.append("first_seen < ?")
-        params.append(cutoff)
+        where.append("(status IS NULL OR status != 'hidden')")
+        if bucket == "new":
+            where.append("first_seen >= ?")
+            params.append(cutoff)
+        else:
+            where.append("first_seen < ?")
+            params.append(cutoff)
     if q:
         where.append("(title LIKE ? OR employer LIKE ? OR ort LIKE ?)")
         params += [f"%{q}%"] * 3
@@ -99,7 +113,8 @@ def fetch(bucket, new_window_hours, q=None, search_name=None):
         where.append("search_name = ?")
         params.append(search_name)
     sql = ("SELECT * FROM jobs WHERE " + " AND ".join(where) +
-           " ORDER BY first_seen DESC LIMIT 500")
+           " ORDER BY first_seen DESC LIMIT ? OFFSET ?")
+    params += [limit, offset]
     with contextlib.closing(_conn()) as c:
         return [dict(r) for r in c.execute(sql, params).fetchall()]
 
@@ -109,17 +124,34 @@ def stats(new_window_hours):
     with contextlib.closing(_conn()) as c:
         total = c.execute("SELECT COUNT(*) FROM jobs").fetchone()[0]
         new = c.execute(
-            "SELECT COUNT(*) FROM jobs WHERE first_seen >= ?", (cutoff,)
+            "SELECT COUNT(*) FROM jobs WHERE first_seen >= ? "
+            "AND (status IS NULL OR status != 'hidden')", (cutoff,)
         ).fetchone()[0]
-    return {"total": total, "new": new}
+        saved = c.execute(
+            "SELECT COUNT(*) FROM jobs WHERE status = 'saved'"
+        ).fetchone()[0]
+    return {"total": total, "new": new, "saved": saved}
 
 
 def prune(prune_after_days):
     cutoff = _cutoff_iso(prune_after_days * 24)
     with contextlib.closing(_conn()) as c:
-        cur = c.execute("DELETE FROM jobs WHERE last_seen < ?", (cutoff,))
+        cur = c.execute(
+            "DELETE FROM jobs WHERE last_seen < ? AND (status IS NULL OR status != 'saved')",
+            (cutoff,),
+        )
         c.commit()
         return cur.rowcount
+
+
+def set_status(refnr, status):
+    """Mark a job as saved/hidden, or clear it (status=None). Returns True if found."""
+    if status not in STATUSES:
+        raise ValueError(f"invalid status: {status!r}")
+    with contextlib.closing(_conn()) as c:
+        cur = c.execute("UPDATE jobs SET status=? WHERE refnr=?", (status, refnr))
+        c.commit()
+        return cur.rowcount > 0
 
 
 def meta_set(key, value):

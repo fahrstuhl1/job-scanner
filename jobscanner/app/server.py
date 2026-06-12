@@ -9,6 +9,7 @@ WEB_DIR = os.path.join(os.path.dirname(__file__), "web")
 
 
 MAX_SCAN_DAYS = 90
+MAX_LIMIT = 500
 
 
 class State:
@@ -29,12 +30,32 @@ def create_app(state):
     @app.get("/api/jobs")
     def jobs():
         bucket = request.args.get("bucket", "new")
-        if bucket not in ("new", "archive"):
+        if bucket not in ("new", "archive", "saved", "hidden"):
             bucket = "new"
         q = request.args.get("q") or None
         search_name = request.args.get("search") or None
         win = int(state.opts.get("new_window_hours", 24))
-        return jsonify(db.fetch(bucket, win, q, search_name))
+        try:
+            limit = int(request.args.get("limit", 100))
+        except ValueError:
+            limit = 100
+        try:
+            offset = int(request.args.get("offset", 0))
+        except ValueError:
+            offset = 0
+        limit = max(1, min(MAX_LIMIT, limit))
+        offset = max(0, offset)
+        return jsonify(db.fetch(bucket, win, q, search_name, limit, offset))
+
+    @app.post("/api/jobs/<refnr>/status")
+    def set_job_status(refnr):
+        body = request.get_json(silent=True) or {}
+        status = body.get("status")
+        if status not in (None, "saved", "hidden"):
+            return jsonify({"ok": False, "error": "ungueltiger status"}), 400
+        if not db.set_status(refnr, status):
+            return jsonify({"ok": False, "error": "nicht gefunden"}), 404
+        return jsonify({"ok": True})
 
     @app.get("/api/stats")
     def stats():
