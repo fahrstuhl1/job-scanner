@@ -48,6 +48,8 @@ Falls kein Git/Internet-Zugriff vom Supervisor aus möglich ist, den Ordner
 | `new_window_hours` | Wie lange ein Treffer als „neu“ gilt (Standard: 24) |
 | `prune_after_days` | Treffer löschen, die so lange nicht mehr in Ergebnissen auftauchten |
 | `initial_scan_days` | Beim allerersten Scan zusätzlich Stellen abrufen, die bis zu so viele Tage zurückliegen (0 = aus, Standard: 30) |
+| `exclude_terms` | Globale Liste von Begriffen; Treffer, deren Titel oder Arbeitgeber einen davon enthalten, werden verworfen |
+| `mqtt_enabled` | Veröffentlicht einen Sensor „neue Stellen“ per MQTT-Discovery (benötigt den HA-MQTT-Dienst) |
 | `log_level` | trace/debug/info/warning/error |
 
 Beispiel:
@@ -62,7 +64,17 @@ searches:
     query: "IT Infrastructure Manager"
   - name: "Leitung Systemadministration"
     query: "Leiter Systemadministration"
+    exclude:
+      - "Zeitarbeit"
+exclude_terms:
+  - "Praktikum"
+mqtt_enabled: true
 ```
+
+Jedes Suchprofil kann zusätzlich eine eigene `exclude`-Liste mitbringen, die
+zusammen mit den globalen `exclude_terms` angewendet wird (Treffer, deren
+Titel oder Arbeitgeber einen der Begriffe enthält – ohne Berücksichtigung
+von Groß-/Kleinschreibung –, werden verworfen).
 
 ## Wie „Neu“ vs. „Archiv“ funktioniert
 
@@ -89,14 +101,32 @@ einstellbar, 0–90 Tage). Beim allerersten Scan passiert das automatisch über
 `initial_scan_days`, damit von Anfang an auch ältere, noch offene Stellen
 auftauchen.
 
+## Merken & Verstecken
+
+Jede Karte hat zwei Aktionen:
+
+- **☆ Merken / ★ Gemerkt**: legt die Stelle im Tab **Gemerkt** ab (zur
+  Wiedervorlage) – gemerkte Stellen werden auch nie automatisch durch
+  `prune_after_days` gelöscht.
+- **Verstecken**: entfernt die Stelle aus Neu/Archiv/Gemerkt; landet im Tab
+  **Versteckt** und kann von dort über „Wiederherstellen“ zurückgeholt werden.
+
+## HA-Benachrichtigung bei neuen Treffern (MQTT)
+
+Mit `mqtt_enabled: true` (und installiertem MQTT-Broker-Add-on, z. B.
+Mosquitto) veröffentlicht der Scanner nach jedem Lauf per MQTT-Discovery
+einen Sensor **„Jobscanner neue Stellen“** mit der aktuellen Anzahl neuer
+Treffer (`new_window_hours`). Darauf lässt sich eine HA-Automation (z. B.
+Push-Benachrichtigung bei Anstieg) aufsetzen.
+
 ## Daten & Speicher
 
-SQLite unter `/data/jobs.db` (überlebt Add-on-Neustarts/-Updates).
+SQLite unter `/data/jobs.db` (überlebt Add-on-Neustarts/-Updates), inkl.
+Indizes auf Entdeckungsdatum, Suchprofil und Status für flotte Abfragen auch
+bei vielen Treffern. Die Liste lädt anfangs 100 Treffer und bietet bei Bedarf
+einen „Mehr laden“-Button. HTTP-Anfragen an die Jobsuche-API werden bei
+vorübergehenden Fehlern automatisch (mit Backoff) wiederholt.
 
 ## Mögliche Erweiterungen
 
-- **HA-Benachrichtigung bei neuen Treffern**: per MQTT-Discovery einen Sensor
-  „neue Stellen (24h)“ veröffentlichen und in einer Automation auf Anstieg
-  triggern. Hooks dafür sitzen im `poller()` in `app/main.py` (nach `db.upsert`).
 - **Radius/Standort pro Suchprofil** statt global.
-- **Negativ-Filter** (Begriffe, die eine Stelle ausschließen).

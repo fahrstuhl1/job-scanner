@@ -199,6 +199,17 @@
     font-family: var(--mono); font-size: 12px;
     color: var(--teal);
   }
+  .card-btn {
+    font-family: var(--mono); font-size: 11px;
+    color: var(--muted); background: var(--raised);
+    border: 1px solid var(--hair); border-radius: 999px;
+    padding: 3px 9px; cursor: pointer;
+    transition: color .15s ease, border-color .15s ease;
+  }
+  .card-btn:hover { color: var(--text); border-color: var(--teal-dim); }
+  .card-btn.active { color: var(--fresh); border-color: var(--fresh-dim); }
+  .card-btn:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+  .load-more { display: block; margin: 14px auto 0; }
 
   /* ---- empty / loading ---- */
   .empty {
@@ -258,6 +269,8 @@
     <div class="tabs">
       <button class="tab active" data-bucket="new" id="tabNew">Neu</button>
       <button class="tab" data-bucket="archive" id="tabArch">Archiv</button>
+      <button class="tab" data-bucket="saved" id="tabSaved">Gemerkt</button>
+      <button class="tab" data-bucket="hidden" id="tabHidden">Versteckt</button>
     </div>
     <span class="grow"></span>
     <select class="filter" id="filter"><option value="">Alle Profile</option></select>
@@ -275,7 +288,25 @@
 
 <script>
 const $ = s => document.querySelector(s);
-let state = { bucket: "new", q: "", filter: "", sort: "first_seen", window: 24, jobs: [] };
+const UI_STATE_KEY = "jobscanner-ui";
+let state = { bucket: "new", q: "", filter: "", sort: "first_seen", window: 24, jobs: [], limit: 100 };
+
+function loadUiState() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(UI_STATE_KEY) || "{}");
+    if (saved.bucket) state.bucket = saved.bucket;
+    if (typeof saved.q === "string") state.q = saved.q;
+    if (typeof saved.filter === "string") state.filter = saved.filter;
+    if (saved.sort) state.sort = saved.sort;
+  } catch (e) {}
+}
+function saveUiState() {
+  try {
+    localStorage.setItem(UI_STATE_KEY, JSON.stringify({
+      bucket: state.bucket, q: state.q, filter: state.filter, sort: state.sort,
+    }));
+  } catch (e) {}
+}
 
 function deAgo(iso) {
   if (!iso) return "";
@@ -320,12 +351,13 @@ async function loadStats() {
         const o = document.createElement("option");
         o.value = o.textContent = n; sel.appendChild(o);
       });
+      if (state.filter) sel.value = state.filter;
     }
   } catch (e) { $("#statusText").textContent = "offline"; }
 }
 
 async function loadJobs() {
-  const url = `api/jobs?bucket=${state.bucket}`
+  const url = `api/jobs?bucket=${state.bucket}&limit=${state.limit}`
     + (state.q ? `&q=${encodeURIComponent(state.q)}` : "")
     + (state.filter ? `&search=${encodeURIComponent(state.filter)}` : "");
   let jobs = [];
@@ -350,12 +382,27 @@ function sortJobs(jobs) {
   });
 }
 
+const EMPTY_MESSAGES = {
+  new: ["Keine neuen Stellen im Fenster", "Der Scanner läuft weiter — neue Treffer erscheinen hier automatisch."],
+  archive: ["Archiv ist leer", "Hier landen Stellen, sobald sie älter als das Neu-Fenster sind."],
+  saved: ["Noch nichts gemerkt", "Mit „☆ Merken“ landen Stellen hier zur Wiedervorlage."],
+  hidden: ["Nichts versteckt", "Mit „Verstecken“ entfernte Stellen landen hier und können wiederhergestellt werden."],
+};
+
+function cardActions(j) {
+  if (state.bucket === "hidden") {
+    return `<button class="card-btn" data-action="restore" data-refnr="${esc(j.refnr)}">Wiederherstellen</button>`;
+  }
+  const saved = j.status === "saved";
+  return `
+    <button class="card-btn${saved ? " active" : ""}" data-action="${saved ? "unsave" : "save"}" data-refnr="${esc(j.refnr)}">${saved ? "★ Gemerkt" : "☆ Merken"}</button>
+    <button class="card-btn" data-action="hide" data-refnr="${esc(j.refnr)}">Verstecken</button>`;
+}
+
 function render(jobs) {
   const list = $("#list");
   if (!jobs.length) {
-    const msg = state.bucket === "new"
-      ? ["Keine neuen Stellen im Fenster", "Der Scanner läuft weiter — neue Treffer erscheinen hier automatisch."]
-      : ["Archiv ist leer", "Hier landen Stellen, sobald sie älter als das Neu-Fenster sind."];
+    const msg = EMPTY_MESSAGES[state.bucket] || EMPTY_MESSAGES.archive;
     list.innerHTML = `<div class="empty"><div class="big">${msg[0]}</div><div class="sub">${msg[1]}</div></div>`;
     return;
   }
@@ -377,10 +424,16 @@ function render(jobs) {
           ${dist}
           <span><span class="k">veröffentlicht</span> ${deDate(j.published)}</span>
           ${j.entry_date ? `<span><span class="k">Eintritt</span> ${deDate(j.entry_date)}</span>` : ""}
+          ${cardActions(j)}
         </div>
         ${j.external_url ? `<span class="view-arrow">Ansehen →</span>` : ""}
       </${tag}>`;
   }).join("");
+  if (jobs.length === state.limit) {
+    list.insertAdjacentHTML("beforeend",
+      `<button class="scan secondary load-more" id="loadMore">Mehr laden</button>`);
+    $("#loadMore").addEventListener("click", () => { state.limit += 100; loadJobs(); });
+  }
 }
 function esc(s) { return String(s ?? "").replace(/[&<>"]/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;" }[c])); }
 
@@ -389,15 +442,49 @@ document.querySelectorAll(".tab").forEach(t => t.addEventListener("click", () =>
   document.querySelectorAll(".tab").forEach(x => x.classList.remove("active"));
   t.classList.add("active");
   state.bucket = t.dataset.bucket;
+  state.limit = 100;
+  saveUiState();
   loadJobs();
 }));
 let qTimer;
 $("#q").addEventListener("input", e => {
   clearTimeout(qTimer);
-  qTimer = setTimeout(() => { state.q = e.target.value.trim(); loadJobs(); }, 250);
+  qTimer = setTimeout(() => {
+    state.q = e.target.value.trim();
+    state.limit = 100;
+    saveUiState();
+    loadJobs();
+  }, 250);
 });
-$("#filter").addEventListener("change", e => { state.filter = e.target.value; loadJobs(); });
-$("#sort").addEventListener("change", e => { state.sort = e.target.value; render(sortJobs(state.jobs)); });
+$("#filter").addEventListener("change", e => {
+  state.filter = e.target.value;
+  state.limit = 100;
+  saveUiState();
+  loadJobs();
+});
+$("#sort").addEventListener("change", e => {
+  state.sort = e.target.value;
+  saveUiState();
+  render(sortJobs(state.jobs));
+});
+
+$("#list").addEventListener("click", async e => {
+  const btn = e.target.closest(".card-btn");
+  if (!btn) return;
+  e.preventDefault();
+  e.stopPropagation();
+  const refnr = btn.dataset.refnr;
+  const status = { save: "saved", unsave: null, hide: "hidden", restore: null }[btn.dataset.action];
+  btn.disabled = true;
+  try {
+    await fetch(`api/jobs/${encodeURIComponent(refnr)}/status`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status }),
+    });
+  } catch (err) {}
+  loadJobs();
+});
 function triggerScan(body) {
   const scanBtn = $("#scanBtn"), deepBtn = $("#deepBtn");
   const prevScan = scanBtn.textContent, prevDeep = deepBtn.textContent;
@@ -431,6 +518,13 @@ $("#deepStart").addEventListener("click", () => {
   $("#modalBackdrop").hidden = true;
   triggerScan({ days });
 });
+
+loadUiState();
+document.querySelectorAll(".tab").forEach(t => {
+  t.classList.toggle("active", t.dataset.bucket === state.bucket);
+});
+$("#q").value = state.q;
+$("#sort").value = state.sort;
 
 loadStats(); loadJobs();
 setInterval(loadStats, 30000);

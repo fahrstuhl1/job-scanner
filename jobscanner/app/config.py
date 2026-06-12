@@ -14,6 +14,8 @@ DEFAULTS = {
     "new_window_hours": 24,
     "prune_after_days": 45,
     "initial_scan_days": 30,
+    "exclude_terms": [],
+    "mqtt_enabled": False,
     "log_level": "info",
 }
 
@@ -31,13 +33,22 @@ def load():
     except (ValueError, OSError):
         pass
 
-    # normalise searches: allow plain strings too
+    # normalise searches: allow plain strings too, with optional per-search
+    # exclude list
     norm = []
     for s in opts.get("searches") or []:
         if isinstance(s, str):
-            norm.append({"name": s, "query": s})
+            norm.append({"name": s, "query": s, "exclude": []})
         elif isinstance(s, dict) and (s.get("query") or s.get("name")):
-            norm.append({"name": s.get("name") or s.get("query"),
-                         "query": s.get("query") or s.get("name")})
+            norm.append({
+                "name": s.get("name") or s.get("query"),
+                "query": s.get("query") or s.get("name"),
+                "exclude": [x for x in (s.get("exclude") or []) if isinstance(x, str)],
+            })
     opts["searches"] = norm or DEFAULTS["searches"]
+
+    # normalise global exclude terms
+    opts["exclude_terms"] = [
+        x for x in (opts.get("exclude_terms") or []) if isinstance(x, str)
+    ]
     return opts

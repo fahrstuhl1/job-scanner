@@ -1,5 +1,5 @@
 name: Job Scanner
-version: "1.1.0"
+version: "1.2.0"
 slug: jobscanner
 description: >-
   Beobachtet die Jobsuche der Bundesagentur fuer Arbeit und meldet neue
@@ -31,6 +31,8 @@ options:
   new_window_hours: 24
   prune_after_days: 45
   initial_scan_days: 30
+  exclude_terms: []
+  mqtt_enabled: false
   log_level: info
 schema:
   wo: str
@@ -38,6 +40,8 @@ schema:
   searches:
     - name: str
       query: str
+      exclude:
+        - "str?"
   angebotsart: int(1,99)
   include_zeitarbeit: bool
   include_pav: bool
@@ -45,4 +49,9 @@ schema:
   new_window_hours: int(1,720)
   prune_after_days: int(1,365)
   initial_scan_days: int(0,90)
+  exclude_terms:
+    - "str?"
+  mqtt_enabled: bool
   log_level: list(trace|debug|info|warning|error)
+services:
+  - mqtt:want
