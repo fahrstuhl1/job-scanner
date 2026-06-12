@@ -33,7 +33,8 @@ def _parse(e, search_name):
     }
 
 
-def search_one(query, wo, umkreis, angebotsart, zeitarbeit, pav, search_name):
+def search_one(query, wo, umkreis, angebotsart, zeitarbeit, pav, search_name,
+                veroeffentlichtseit=None):
     found = {}
     for page in range(1, MAX_PAGES + 1):
         params = {
@@ -46,6 +47,8 @@ def search_one(query, wo, umkreis, angebotsart, zeitarbeit, pav, search_name):
             "zeitarbeit": "true" if zeitarbeit else "false",
             "pav": "true" if pav else "false",
         }
+        if veroeffentlichtseit is not None:
+            params["veroeffentlichtseit"] = veroeffentlichtseit
         r = requests.get(BASE, headers=HEADERS, params=params, timeout=30)
         r.raise_for_status()
         data = r.json()
@@ -59,7 +62,8 @@ def search_one(query, wo, umkreis, angebotsart, zeitarbeit, pav, search_name):
     return list(found.values())
 
 
-def scan(searches, wo, umkreis, angebotsart, zeitarbeit, pav):
+def scan(searches, wo, umkreis, angebotsart, zeitarbeit, pav,
+         veroeffentlichtseit=None):
     """Run every configured search; dedupe across searches (first match wins)."""
     all_jobs = {}
     for s in searches:
@@ -69,7 +73,7 @@ def scan(searches, wo, umkreis, angebotsart, zeitarbeit, pav):
             continue
         try:
             for j in search_one(query, wo, umkreis, angebotsart,
-                                zeitarbeit, pav, name):
+                                zeitarbeit, pav, name, veroeffentlichtseit):
                 all_jobs.setdefault(j["refnr"], j)
             log.debug("Suche '%s': %d Treffer (kumuliert %d)",
                       name, len(all_jobs), len(all_jobs))

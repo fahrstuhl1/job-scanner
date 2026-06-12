@@ -13,6 +13,7 @@ DEFAULTS = {
     "poll_interval_minutes": 60,
     "new_window_hours": 24,
     "prune_after_days": 45,
+    "initial_scan_days": 30,
     "log_level": "info",
 }
 
