@@ -111,7 +111,47 @@
     padding: 6px 9px; width: 70px;
   }
   .modal input[type="number"]:focus { outline: none; border-color: var(--teal-dim); }
-  .modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
+  .modal-actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+  .modal.wide { max-width: 520px; max-height: 86vh; overflow-y: auto; }
+
+  /* ---- settings form ---- */
+  button.icon-btn {
+    font-size: 16px; line-height: 1;
+    color: var(--muted); background: var(--surface);
+    border: 1px solid var(--hair); border-radius: 8px;
+    padding: 8px 11px; cursor: pointer;
+  }
+  button.icon-btn:hover { color: var(--text); background: var(--raised); }
+  button.icon-btn:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+  .field { margin-bottom: 14px; }
+  .field > label {
+    display: block; font-size: 12px; text-transform: uppercase;
+    letter-spacing: 0.08em; color: var(--muted); margin-bottom: 6px;
+  }
+  .field input[type="text"], .field input[type="number"],
+  .field select, .field textarea {
+    width: 100%; font-family: var(--sans); font-size: 13px;
+    color: var(--text); background: var(--raised);
+    border: 1px solid var(--hair); border-radius: 8px;
+    padding: 7px 10px;
+  }
+  .field input:focus, .field select:focus, .field textarea:focus {
+    outline: none; border-color: var(--teal-dim);
+  }
+  .field textarea { font-family: var(--mono); resize: vertical; }
+  .checkbox-row {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 13px; margin-bottom: 8px; cursor: pointer;
+  }
+  .checkbox-row input { width: auto; }
+  .search-row { display: flex; gap: 6px; margin-bottom: 8px; }
+  .search-row input { flex: 1 1 0; min-width: 0; }
+  .search-row .s-query { flex: 1 1 0; }
+  .search-row .s-exclude { flex: 1 1 0; }
+  .search-row .s-remove { flex: none; }
+  .settings-error {
+    color: #ef8b8d; font-size: 13px; margin: 4px 0 12px;
+  }
 
   /* ---- stat strip ---- */
   .stats { display: flex; gap: 10px; margin-bottom: 22px; flex-wrap: wrap; }
@@ -235,6 +275,7 @@
 <body>
 <div class="wrap">
   <header class="topbar">
+    <button class="icon-btn" id="settingsBtn" title="Sucheinstellungen">☰</button>
     <span class="brand">Job<span class="dot">·</span>Scanner</span>
     <span class="chip" id="loc">–</span>
     <span class="spacer"></span>
@@ -255,6 +296,50 @@
       <div class="modal-actions">
         <button class="scan secondary" id="deepCancel">Abbrechen</button>
         <button class="scan" id="deepStart">Starten</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="settingsBackdrop" hidden>
+    <div class="modal wide">
+      <h3>Sucheinstellungen</h3>
+      <div class="settings-error" id="settingsError" hidden></div>
+
+      <div class="field">
+        <label for="setWo">Ort (wo)</label>
+        <input type="text" id="setWo">
+      </div>
+      <div class="field">
+        <label for="setUmkreis">Umkreis (km)</label>
+        <input type="number" id="setUmkreis" min="1" max="200">
+      </div>
+      <div class="field">
+        <label for="setAngebotsart">Angebotsart</label>
+        <select id="setAngebotsart">
+          <option value="1">Arbeit</option>
+          <option value="2">Selbstständigkeit</option>
+          <option value="4">Ausbildung</option>
+          <option value="34">Praktikum/Trainee</option>
+        </select>
+      </div>
+      <label class="checkbox-row"><input type="checkbox" id="setZeitarbeit"> Zeitarbeit einschließen</label>
+      <label class="checkbox-row"><input type="checkbox" id="setPav"> PAV einschließen</label>
+
+      <div class="field">
+        <label for="setExcludeTerms">Globale Ausschlussbegriffe (eine Zeile je Begriff)</label>
+        <textarea id="setExcludeTerms" rows="3"></textarea>
+      </div>
+
+      <div class="field">
+        <label>Suchprofile</label>
+        <div id="searchRows"></div>
+        <button class="scan secondary" id="addSearchRow" type="button">+ Suchprofil</button>
+      </div>
+
+      <div class="modal-actions">
+        <button class="scan secondary" id="settingsReset" type="button">Zurücksetzen</button>
+        <button class="scan secondary" id="settingsCancel" type="button">Abbrechen</button>
+        <button class="scan" id="settingsSave" type="button">Speichern</button>
       </div>
     </div>
   </div>
@@ -518,6 +603,117 @@ $("#deepStart").addEventListener("click", () => {
   $("#modalBackdrop").hidden = true;
   triggerScan({ days });
 });
+
+function searchRowHtml(s) {
+  s = s || {};
+  const esc = v => (v ?? "").toString().replace(/"/g, "&quot;");
+  return `
+    <div class="search-row">
+      <input type="text" class="s-name" placeholder="Name" value="${esc(s.name)}">
+      <input type="text" class="s-query" placeholder="Suchbegriff" value="${esc(s.query)}">
+      <input type="text" class="s-exclude" placeholder="Ausschluss (Komma-getrennt)" value="${esc((s.exclude || []).join(", "))}">
+      <button class="scan secondary s-remove" type="button" title="Entfernen">✕</button>
+    </div>`;
+}
+function renderSearchRows(searches) {
+  $("#searchRows").innerHTML = (searches || []).map(searchRowHtml).join("");
+}
+$("#addSearchRow").addEventListener("click", () => {
+  $("#searchRows").insertAdjacentHTML("beforeend", searchRowHtml());
+});
+$("#searchRows").addEventListener("click", e => {
+  if (e.target.classList.contains("s-remove")) {
+    e.target.closest(".search-row").remove();
+  }
+});
+
+function showSettingsError(msg) {
+  const el = $("#settingsError");
+  if (msg) { el.textContent = msg; el.hidden = false; }
+  else { el.textContent = ""; el.hidden = true; }
+}
+
+function populateSettings(s) {
+  $("#setWo").value = s.wo || "";
+  $("#setUmkreis").value = s.umkreis ?? "";
+  $("#setAngebotsart").value = String(s.angebotsart ?? 1);
+  $("#setZeitarbeit").checked = !!s.include_zeitarbeit;
+  $("#setPav").checked = !!s.include_pav;
+  $("#setExcludeTerms").value = (s.exclude_terms || []).join("\n");
+  renderSearchRows(s.searches || []);
+}
+
+async function openSettings() {
+  showSettingsError(null);
+  try {
+    const s = await fetch("api/settings").then(r => r.json());
+    populateSettings(s);
+    $("#settingsBackdrop").hidden = false;
+  } catch (err) {
+    showSettingsError("Einstellungen konnten nicht geladen werden.");
+  }
+}
+
+function collectSettings() {
+  const searches = [...document.querySelectorAll("#searchRows .search-row")].map(row => ({
+    name: row.querySelector(".s-name").value.trim(),
+    query: row.querySelector(".s-query").value.trim(),
+    exclude: row.querySelector(".s-exclude").value.split(",").map(t => t.trim()).filter(Boolean),
+  }));
+  return {
+    wo: $("#setWo").value.trim(),
+    umkreis: parseInt($("#setUmkreis").value, 10),
+    angebotsart: parseInt($("#setAngebotsart").value, 10),
+    include_zeitarbeit: $("#setZeitarbeit").checked,
+    include_pav: $("#setPav").checked,
+    exclude_terms: $("#setExcludeTerms").value.split("\n").map(t => t.trim()).filter(Boolean),
+    searches,
+  };
+}
+
+async function saveSettings() {
+  showSettingsError(null);
+  try {
+    const res = await fetch("api/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(collectSettings()),
+    });
+    const body = await res.json();
+    if (!res.ok || !body.ok) {
+      showSettingsError(body.error || "Einstellungen konnten nicht gespeichert werden.");
+      return;
+    }
+    $("#settingsBackdrop").hidden = true;
+    loadStats(); loadJobs();
+  } catch (err) {
+    showSettingsError("Einstellungen konnten nicht gespeichert werden.");
+  }
+}
+
+async function resetSettings() {
+  showSettingsError(null);
+  try {
+    const res = await fetch("api/settings", { method: "DELETE" });
+    const body = await res.json();
+    if (!res.ok || !body.ok) {
+      showSettingsError("Zurücksetzen fehlgeschlagen.");
+      return;
+    }
+    populateSettings(body.settings);
+    loadStats(); loadJobs();
+  } catch (err) {
+    showSettingsError("Zurücksetzen fehlgeschlagen.");
+  }
+}
+
+$("#settingsBtn").addEventListener("click", openSettings);
+$("#settingsCancel").addEventListener("click", () => { $("#settingsBackdrop").hidden = true; });
+$("#settingsBackdrop").addEventListener("click", e => {
+  if (e.target === $("#settingsBackdrop")) $("#settingsBackdrop").hidden = true;
+});
+$("#settingsSave").addEventListener("click", saveSettings);
+$("#settingsReset").addEventListener("click", resetSettings);
 
 loadUiState();
 document.querySelectorAll(".tab").forEach(t => {

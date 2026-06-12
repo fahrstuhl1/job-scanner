@@ -19,6 +19,35 @@ DEFAULTS = {
     "log_level": "info",
 }
 
+# subset of options that can be changed at runtime via /api/settings
+SETTINGS_FIELDS = (
+    "wo", "umkreis", "angebotsart", "include_zeitarbeit", "include_pav",
+    "exclude_terms", "searches",
+)
+
+
+def normalize_searches(searches):
+    """Allow plain strings too, with optional per-search exclude list."""
+    norm = []
+    for s in searches or []:
+        if isinstance(s, str):
+            norm.append({"name": s, "query": s, "exclude": []})
+        elif isinstance(s, dict) and (s.get("query") or s.get("name")):
+            norm.append({
+                "name": s.get("name") or s.get("query"),
+                "query": s.get("query") or s.get("name"),
+                "exclude": [x for x in (s.get("exclude") or []) if isinstance(x, str)],
+            })
+    return norm
+
+
+def normalize(opts):
+    opts["searches"] = normalize_searches(opts.get("searches")) or DEFAULTS["searches"]
+    opts["exclude_terms"] = [
+        x for x in (opts.get("exclude_terms") or []) if isinstance(x, str)
+    ]
+    return opts
+
 
 def load():
     """Load add-on options from /data/options.json, fall back to defaults."""
@@ -33,22 +62,4 @@ def load():
     except (ValueError, OSError):
         pass
 
-    # normalise searches: allow plain strings too, with optional per-search
-    # exclude list
-    norm = []
-    for s in opts.get("searches") or []:
-        if isinstance(s, str):
-            norm.append({"name": s, "query": s, "exclude": []})
-        elif isinstance(s, dict) and (s.get("query") or s.get("name")):
-            norm.append({
-                "name": s.get("name") or s.get("query"),
-                "query": s.get("query") or s.get("name"),
-                "exclude": [x for x in (s.get("exclude") or []) if isinstance(x, str)],
-            })
-    opts["searches"] = norm or DEFAULTS["searches"]
-
-    # normalise global exclude terms
-    opts["exclude_terms"] = [
-        x for x in (opts.get("exclude_terms") or []) if isinstance(x, str)
-    ]
-    return opts
+    return normalize(opts)

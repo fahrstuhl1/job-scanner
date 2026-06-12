@@ -1,11 +1,14 @@
 import contextlib
 import datetime
+import json
 import os
 import sqlite3
 
 DB_PATH = os.environ.get("DB_PATH", "/data/jobs.db")
 
 STATUSES = (None, "saved", "hidden")
+
+SETTINGS_KEY = "settings_override"
 
 
 def _conn():
@@ -168,3 +171,25 @@ def meta_get(key, default=None):
     with contextlib.closing(_conn()) as c:
         row = c.execute("SELECT value FROM meta WHERE key=?", (key,)).fetchone()
         return row[0] if row else default
+
+
+def get_settings_override():
+    """Return persisted job-search settings that override the add-on config."""
+    raw = meta_get(SETTINGS_KEY)
+    if not raw:
+        return {}
+    try:
+        return json.loads(raw)
+    except ValueError:
+        return {}
+
+
+def set_settings_override(settings):
+    meta_set(SETTINGS_KEY, json.dumps(settings))
+
+
+def clear_settings_override():
+    with contextlib.closing(_conn()) as c:
+        c.execute("DELETE FROM meta WHERE key=?", (SETTINGS_KEY,))
+        c.commit()
+
