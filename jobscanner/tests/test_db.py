@@ -7,12 +7,6 @@ import pytest
 import db
 
 
-@pytest.fixture(autouse=True)
-def fresh_db(tmp_path, monkeypatch):
-    monkeypatch.setattr(db, "DB_PATH", str(tmp_path / "jobs.db"))
-    db.init()
-
-
 def _job(refnr, **overrides):
     job = {
         "refnr": refnr,

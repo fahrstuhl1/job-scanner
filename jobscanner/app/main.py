@@ -64,6 +64,10 @@ def main():
     logging.getLogger("waitress").setLevel(logging.WARNING)
 
     db.init()
+    override = db.get_settings_override()
+    if override:
+        opts.update(override)
+        opts = config.normalize(opts)
     state = server.State()
     state.opts = opts
 

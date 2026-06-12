@@ -101,6 +101,19 @@ einstellbar, 0–90 Tage). Beim allerersten Scan passiert das automatisch über
 `initial_scan_days`, damit von Anfang an auch ältere, noch offene Stellen
 auftauchen.
 
+## Sucheinstellungen direkt in der App (☰)
+
+Über das ☰-Menü oben links lassen sich die wichtigsten Sucheinstellungen
+direkt im Dashboard ändern, ohne über die HA-Add-on-Konfiguration zu gehen:
+Ort (`wo`), Umkreis, Angebotsart, Zeitarbeit/PAV, globale Ausschlussbegriffe
+und die Suchprofile (Name, Suchbegriff, profilspezifische Ausschlussbegriffe).
+
+Gespeicherte Änderungen werden in der Datenbank hinterlegt und überschreiben
+beim nächsten Neustart die Werte aus der Add-on-Konfiguration; ein Klick auf
+„Speichern“ stößt sofort einen neuen Scan mit den geänderten Einstellungen
+an. Über „Zurücksetzen“ wird wieder auf die in HA konfigurierten Werte
+umgeschaltet.
+
 ## Merken & Verstecken
 
 Jede Karte hat zwei Aktionen:
