@@ -210,6 +210,12 @@
     </div>
     <span class="grow"></span>
     <select class="filter" id="filter"><option value="">Alle Profile</option></select>
+    <select class="filter" id="sort">
+      <option value="first_seen">Neueste Funde</option>
+      <option value="distance">Entfernung</option>
+      <option value="published">Veröffentlichungsdatum</option>
+      <option value="entry_date">Eintrittsdatum</option>
+    </select>
     <input class="search" id="q" type="search" placeholder="Titel, Firma, Ort …">
   </div>
 
@@ -218,7 +224,7 @@
 
 <script>
 const $ = s => document.querySelector(s);
-let state = { bucket: "new", q: "", filter: "", window: 24 };
+let state = { bucket: "new", q: "", filter: "", sort: "first_seen", window: 24, jobs: [] };
 
 function deAgo(iso) {
   if (!iso) return "";
@@ -273,7 +279,24 @@ async function loadJobs() {
     + (state.filter ? `&search=${encodeURIComponent(state.filter)}` : "");
   let jobs = [];
   try { jobs = await (await fetch(url)).json(); } catch (e) {}
-  render(jobs);
+  state.jobs = jobs;
+  render(sortJobs(jobs));
+}
+
+// sort a copy of the jobs by the selected attribute; entries missing the
+// value sort to the end regardless of direction
+function sortJobs(jobs) {
+  const key = state.sort;
+  const asc = key === "distance" || key === "entry_date";
+  return [...jobs].sort((a, b) => {
+    let av = a[key], bv = b[key];
+    if (av == null && bv == null) return 0;
+    if (av == null) return 1;
+    if (bv == null) return -1;
+    if (key === "distance") return av - bv;
+    return asc ? (av < bv ? -1 : av > bv ? 1 : 0)
+               : (av > bv ? -1 : av < bv ? 1 : 0);
+  });
 }
 
 function render(jobs) {
@@ -319,6 +342,7 @@ $("#q").addEventListener("input", e => {
   qTimer = setTimeout(() => { state.q = e.target.value.trim(); loadJobs(); }, 250);
 });
 $("#filter").addEventListener("change", e => { state.filter = e.target.value; loadJobs(); });
+$("#sort").addEventListener("change", e => { state.sort = e.target.value; render(sortJobs(state.jobs)); });
 $("#scanBtn").addEventListener("click", async () => {
   const b = $("#scanBtn"); b.disabled = true; b.textContent = "scannt …";
   try { await fetch("api/scan", { method: "POST" }); } catch (e) {}
